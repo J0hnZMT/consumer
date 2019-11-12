@@ -1,5 +1,39 @@
 import pika
 from configparser import ConfigParser
+import yaml
+import logging.config
+import logging
+import os
+
+
+# setup the logger
+def setup_logging(default_path, default_level, env_key):
+    """ Setup logging configuration """
+    path = default_path
+    value = os.getenv(env_key, None)
+    if value:
+        path = value
+    if os.path.exists(path):
+        with open(path, 'rt') as f:
+            try:
+                config = yaml.safe_load(f.read())
+                logging.config.dictConfig(config)
+            except Exception as e:
+                print(e)
+                print('Error in Logging Configuration. Using default configs')
+                logging.basicConfig(level=default_level)
+    else:
+        logging.basicConfig(level=default_level, filename='logs.log',
+                            format="%(asctime)s:%(name)s:%(levelname)s:%(message)s")
+        print('Failed to load configuration file. Using default configs')
+
+
+""" start the logging function """
+path = "logging.yaml"
+level = logging.INFO
+env = 'LOG_CFG'
+setup_logging(path, level, env)
+logger = logging.getLogger(__name__)
 
 
 # access the config file
@@ -34,11 +68,11 @@ channel.queue_declare(queue=queue_name, durable=True)
 
 
 def callback(ch, method, properties, body):
-    print(" [x] Received %r" % body)
+    logger.info(" [x] Received %r" % body)
 
 
 channel.basic_consume(
     queue=queue_name, on_message_callback=callback, auto_ack=True)
 
-print(' [*] Waiting for messages. To exit press CTRL+C')
+logger.info(' [*] Waiting for messages. To exit press CTRL+C')
 channel.start_consuming()
