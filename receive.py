@@ -2,7 +2,7 @@ import pika
 from configparser import ConfigParser
 import yaml
 import logging.config
-import logging
+import logging as logs
 import os
 
 
@@ -21,19 +21,19 @@ def setup_logging(default_path, default_level, env_key):
             except Exception as e:
                 print(e)
                 print('Error in Logging Configuration. Using default configs')
-                logging.basicConfig(level=default_level)
+                logs.basicConfig(level=default_level)
     else:
-        logging.basicConfig(level=default_level, filename='logs.log',
-                            format="%(asctime)s:%(name)s:%(levelname)s:%(message)s")
+        logs.basicConfig(level=default_level, filename='logs.log',
+                         format="%(asctime)s:%(name)s:%(levelname)s:%(message)s")
         print('Failed to load configuration file. Using default configs')
 
 
 """ start the logging function """
 path = "logging.yaml"
-level = logging.INFO
+level = logs.INFO
 env = 'LOG_CFG'
 setup_logging(path, level, env)
-logger = logging.getLogger(__name__)
+log = logs.getLogger(__name__)
 
 
 # access the config file
@@ -58,21 +58,16 @@ def config_open(filename, section):
 config_file = 'setup.ini'
 section = 'rabbit'
 rabbit = config_open(config_file, section)
-host_name = rabbit.get('host')
-queue_name = rabbit.get('queue')
-connection = pika.BlockingConnection(
-    pika.ConnectionParameters(host=host_name))
+host_name = rabbit['host']
+queue_name = rabbit['queue']
+delay = rabbit['delay']
+connection = pika.BlockingConnection(pika.ConnectionParameters(host=host_name))
 channel = connection.channel()
-
 channel.queue_declare(queue=queue_name, durable=True)
-
-
-def callback(ch, method, properties, body):
-    logger.info(" [x] Received %r" % body)
-
-
-channel.basic_consume(
-    queue=queue_name, on_message_callback=callback, auto_ack=True)
-
-logger.info(' [*] Waiting for messages. To exit press CTRL+C')
-channel.start_consuming()
+while True:
+    result = channel.basic_get(queue=queue_name, auto_ack=True)
+    if result[2] is not None:
+        log.info("[x] Received: {}".format(result[2]))
+    else:
+        log.info("Channel Empty. [*] Waiting for messages. To exit press CTRL+C")
+        connection.sleep(int(delay))
